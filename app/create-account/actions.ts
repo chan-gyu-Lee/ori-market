@@ -1,5 +1,15 @@
 "use server";
+import {
+  PASSWORD_ERROR,
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_REG,
+} from "@/lib/constants";
+import db from "@/lib/db";
 import { z } from "zod";
+import bcrypt from "bcrypt";
+
+import { redirect } from "next/navigation";
+import getSession from "@/lib/session";
 
 const checkUsername = (username: string) => {
   return !username.includes("오리");
@@ -10,15 +20,23 @@ interface ICheckPasswordSame {
   passwordCheck: string;
 }
 
+// 패스워드 일치 확인
 const checkPasswordSame = ({ password, passwordCheck }: ICheckPasswordSame) => {
-  console.log(password, passwordCheck);
-
   return password === passwordCheck;
 };
 
-const passwordRegex = new RegExp(
-  /^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).+$/
-);
+// email 중복확인
+const checkUniqueEmail = async (email: string) => {
+  const user = await db.user.findUnique({
+    where: {
+      email: email,
+    },
+    select: {
+      id: true,
+    },
+  });
+  return !Boolean(user);
+};
 
 const formSchema = z
   .object({
@@ -31,12 +49,13 @@ const formSchema = z
       .max(10, "너무 길어!")
       .trim()
       .refine(checkUsername, "오리는 내꺼야!"),
-    email: z.string().email().trim(),
-    password: z
+    email: z
       .string()
-      .min(4)
+      .email()
       .trim()
-      .regex(passwordRegex, "비밀번호는 영어 소대문자, 숫자, 특문이 있어야돼!"),
+      .refine(checkUniqueEmail, "중복된 이메일입니다."),
+    password: z.string().min(PASSWORD_MIN_LENGTH).trim(),
+    //  .regex(PASSWORD_REG, PASSWORD_ERROR),
     passwordCheck: z.string().min(4).trim(),
   })
   .refine(checkPasswordSame, {
@@ -53,15 +72,31 @@ export async function createAccountAction(prevData: any, formData: FormData) {
     password: formData.get("password"),
     passwordCheck: formData.get("passwordCheck"),
   };
-  console.log(data);
 
-  const result = formSchema.safeParse(data);
-  console.log(result);
+  const result = await formSchema.safeParseAsync(data);
+
   if (!result.success) {
-    console.log(result.data);
-    console.log(result.error.flatten());
     return result.error.flatten();
   } else {
-    console.log(result.data);
+    // 비밀번호 해싱
+    const hashedPassword = await bcrypt.hash(result.data.password, 12);
+    // db 저장
+    const user = await db.user.create({
+      data: {
+        username: result.data.username,
+        email: result.data.email,
+        password: hashedPassword,
+      },
+      select: {
+        id: true,
+      },
+    });
+    // 로그인 시켜주고 홈으로 리다이렉트
+    const session = await getSession();
+
+    session.id = user.id;
+    await session.save();
+
+    redirect("/profile");
   }
 }

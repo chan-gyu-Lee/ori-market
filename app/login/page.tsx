@@ -3,10 +3,11 @@ import Button from "@/components/button";
 import Input from "@/components/inputs";
 import SocialLogin from "@/components/social-login";
 import { useFormState } from "react-dom";
-import { handleForm } from "./actions";
+import { login } from "./actions";
+import { PASSWORD_MIN_LENGTH } from "@/lib/constants";
 
 export default function Login() {
-  const [state, action] = useFormState(handleForm, null);
+  const [state, action] = useFormState(login, null);
   console.log(state);
 
   return (
@@ -21,14 +22,15 @@ export default function Login() {
           required={true}
           type="email"
           placeholder="이메일"
-          errors={[]}
+          errors={state?.fieldErrors.email}
         />
         <Input
           name="password"
           required={true}
+          errors={state?.fieldErrors.password}
           type="password"
           placeholder="비밀번호"
-          errors={state?.error ?? []}
+          minLength={PASSWORD_MIN_LENGTH}
         />
 
         <Button text="로그인" />
