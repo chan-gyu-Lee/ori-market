@@ -26,16 +26,24 @@ const checkPasswordSame = ({ password, passwordCheck }: ICheckPasswordSame) => {
 };
 
 // email 중복확인
-const checkUniqueEmail = async (email: string) => {
+const checkUniqueEmail = async (email: string, ctx: z.RefinementCtx) => {
   const user = await db.user.findUnique({
     where: {
-      email: email,
+      email,
     },
     select: {
       id: true,
     },
   });
-  return !Boolean(user);
+  if (user) {
+    ctx.addIssue({
+      code: "custom",
+      message: "중복된 이메일입니다.",
+      path: ["email"],
+      fatal: true,
+    });
+    return z.NEVER;
+  }
 };
 
 const formSchema = z
@@ -49,14 +57,13 @@ const formSchema = z
       .max(10, "너무 길어!")
       .trim()
       .refine(checkUsername, "오리는 내꺼야!"),
-    email: z
-      .string()
-      .email()
-      .trim()
-      .refine(checkUniqueEmail, "중복된 이메일입니다."),
+    email: z.string().email().trim(),
     password: z.string().min(PASSWORD_MIN_LENGTH).trim(),
     //  .regex(PASSWORD_REG, PASSWORD_ERROR),
     passwordCheck: z.string().min(4).trim(),
+  })
+  .superRefine(async ({ email }, ctx) => {
+    await checkUniqueEmail(email, ctx);
   })
   .refine(checkPasswordSame, {
     message: "비밀번호가 일치하지 않아요!",

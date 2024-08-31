@@ -61,6 +61,7 @@ export const login = async (prevData: any, formData: FormData) => {
     if (ok) {
       const session = await getSession();
       session.id = user!.id;
+      session.save();
       // 프로필 이미지로 이동
       redirect("/profile");
     } else {
